@@ -17,7 +17,7 @@ public class LoadDatabase {
   CommandLineRunner initDatabase(ExamRepository examRepository, HealthcareInstitutionRepository healthcareInstitutionRepository) {
     return args -> {
       HealthcareInstitution institution = healthcareInstitutionRepository.save(
-          new HealthcareInstitution("Clínica Buenas", "69.214.653/0001-70")
+          new HealthcareInstitution("Clínica Buenas", "69214653000170")
       );
       log.info("Preloading " + institution);
       Exam exam = examRepository.save(

@@ -15,5 +15,4 @@ public class HealthcareInstitution {
   private @Id @GeneratedValue Long id;
   @NonNull private String name;
   @NonNull private String cnpj;
-
 }
