@@ -21,4 +21,5 @@ public class Exam {
   @NonNull private String physicianName;
   @NonNull private String physicianCRM;
   @NonNull private String procedureName;
+  private boolean retrieved;
 }

@@ -1,7 +1,9 @@
 package com.example.techchallenge.controller.exam;
 
 import com.example.techchallenge.controller.institution.HealthcareInstitutionException;
+import com.example.techchallenge.controller.institution.HealthcareInstitutionNotFoundException;
 import com.example.techchallenge.entity.Exam;
+import com.example.techchallenge.entity.HealthcareInstitution;
 import com.example.techchallenge.repository.ExamRepository;
 import com.example.techchallenge.repository.HealthcareInstitutionRepository;
 import lombok.AllArgsConstructor;
@@ -42,14 +44,21 @@ public class ExamController {
   ResponseEntity<?> newExam(@RequestBody Exam exam) {
     try {
       if (validaExam(exam)) {
-        if (!institutionRepository.findById(exam.getHealthcareInstitutionId()).isPresent()) {
+        HealthcareInstitution institutionToBeCharged =
+            institutionRepository.findById(exam.getHealthcareInstitutionId()).orElse(null);
+        if (institutionToBeCharged != null) {
+          institutionToBeCharged.chargePixeon(1);
+          Exam examSave = repository.save(exam);
+          EntityModel<Exam> entityModel = assembler.toModel(examSave);
+          institutionRepository.save(institutionToBeCharged);
+          return ResponseEntity.created(
+                  linkTo(methodOn(ExamController.class).one(examSave.getId()))
+                      .withSelfRel()
+                      .toUri())
+              .body(entityModel);
+        } else {
           throw new HealthcareInstitutionException("Healthcare Institution not found");
         }
-        Exam examSave = repository.save(exam);
-        EntityModel<Exam> entityModel = assembler.toModel(examSave);
-        return ResponseEntity.created(
-                linkTo(methodOn(ExamController.class).one(examSave.getId())).withSelfRel().toUri())
-            .body(entityModel);
       }
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -63,8 +72,18 @@ public class ExamController {
 
   @GetMapping("/exams/{id}")
   EntityModel<Exam> one(@PathVariable Long id) {
-    Exam exam =
-        repository.findById(id).orElseThrow(() -> new ExamNotFoundException(id));
+    Exam exam = repository.findById(id).orElseThrow(() -> new ExamNotFoundException(id));
+    HealthcareInstitution institution =
+        institutionRepository
+            .findById(exam.getHealthcareInstitutionId())
+            .orElseThrow(
+                () ->
+                    new HealthcareInstitutionNotFoundException(exam.getHealthcareInstitutionId()));
+    institution.chargePixeon(exam.isRetrieved() ? 0 : 1);
+    exam.setRetrieved(!exam.isRetrieved() || exam.isRetrieved());
+    repository.save(exam);
+    institutionRepository.save(institution);
+
     return assembler.toModel(exam);
   }
 
