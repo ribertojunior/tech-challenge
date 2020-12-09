@@ -22,6 +22,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static com.example.techchallenge.security.Utils.getJWTToken;
 import static com.example.techchallenge.utils.Utils.removeNonNumbers;
 import static com.example.techchallenge.utils.Utils.validaInstitution;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
@@ -129,25 +130,5 @@ public class HealthcareInstitutionController {
     throw new HealthcareInstitutionException("Healthcare Institution info with error");
   }
 
-  private String getJWTToken(String cnpj) {
-    String secret = "secret";
-    List<GrantedAuthority> grantedAuthorities =
-        AuthorityUtils.commaSeparatedStringToAuthorityList("ROLE_USER");
 
-    String token =
-        Jwts.builder()
-            .setId("pixeonJWT")
-            .setSubject(cnpj)
-            .claim(
-                "authorities",
-                grantedAuthorities.stream()
-                    .map(GrantedAuthority::getAuthority)
-                    .collect(Collectors.toList()))
-            .setIssuedAt(new Date(System.currentTimeMillis()))
-            .setExpiration(new Date(System.currentTimeMillis() + 600000))
-            .signWith(SignatureAlgorithm.HS512, secret.getBytes())
-            .compact();
-
-    return "Bearer " + token;
-  }
 }

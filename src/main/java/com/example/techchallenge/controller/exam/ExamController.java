@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static com.example.techchallenge.security.Utils.validaToken;
 import static com.example.techchallenge.utils.Utils.validaExam;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
@@ -41,12 +42,17 @@ public class ExamController {
   }
 
   @PostMapping("/exams")
-  ResponseEntity<?> newExam(@RequestBody Exam exam) {
+  ResponseEntity<?> newExam(@RequestBody Exam exam, @RequestHeader("Authorization") String token) {
     try {
       if (validaExam(exam)) {
         HealthcareInstitution institutionToBeCharged =
             institutionRepository.findById(exam.getHealthcareInstitutionId()).orElse(null);
         if (institutionToBeCharged != null) {
+
+          if (!validaToken(institutionToBeCharged.getCnpj(), token)) {
+            throw new ForbiddenException(
+                "Healthcare Institution Data doesn't match authorization.");
+          }
           institutionToBeCharged.chargePixeon(1);
           Exam examSave = repository.save(exam);
           EntityModel<Exam> entityModel = assembler.toModel(examSave);
@@ -60,17 +66,40 @@ public class ExamController {
           throw new HealthcareInstitutionException("Healthcare Institution not found");
         }
       }
-    } catch (Exception e) {
+    } catch (ForbiddenException e) {
+      return ResponseEntity.status(HttpStatus.FORBIDDEN)
+          .header(HttpHeaders.CONTENT_TYPE, MediaTypes.HTTP_PROBLEM_DETAILS_JSON_VALUE)
+          .body(Problem.create().withTitle("Exam error").withDetail(e.getMessage()));
+    } catch (HealthcareInstitutionException e) {
       return ResponseEntity.status(HttpStatus.BAD_REQUEST)
           .header(HttpHeaders.CONTENT_TYPE, MediaTypes.HTTP_PROBLEM_DETAILS_JSON_VALUE)
           .body(Problem.create().withTitle("Exam error").withDetail(e.getMessage()));
     }
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .header(HttpHeaders.CONTENT_TYPE, MediaTypes.HTTP_PROBLEM_DETAILS_JSON_VALUE)
-        .body(Problem.create().withTitle("Exam with information error."));
+        .body(Problem.create().withTitle("Exam error").withDetail("Exam data malformed"));
   }
 
   @GetMapping("/exams/{id}")
+  EntityModel<Exam> one(@PathVariable Long id, @RequestHeader("Authorization") String token) {
+    Exam exam = repository.findById(id).orElseThrow(() -> new ExamNotFoundException(id));
+    HealthcareInstitution institution =
+        institutionRepository
+            .findById(exam.getHealthcareInstitutionId())
+            .orElseThrow(
+                () ->
+                    new HealthcareInstitutionNotFoundException(exam.getHealthcareInstitutionId()));
+    if (!validaToken(institution.getCnpj(), token)) {
+      throw new ExamNotFoundException(id);
+    }
+    institution.chargePixeon(exam.isRetrieved() ? 0 : 1);
+    exam.setRetrieved(!exam.isRetrieved() || exam.isRetrieved());
+    repository.save(exam);
+    institutionRepository.save(institution);
+
+    return assembler.toModel(exam);
+  }
+
   EntityModel<Exam> one(@PathVariable Long id) {
     Exam exam = repository.findById(id).orElseThrow(() -> new ExamNotFoundException(id));
     HealthcareInstitution institution =
