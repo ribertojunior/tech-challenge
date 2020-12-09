@@ -25,7 +25,7 @@ public class HealthcareInstitution {
   }
 
   public void chargePixeon(int price) {
-    if (this.pixeon - price > 0) {
+    if (this.pixeon - price >= 0) {
       setPixeon( this.pixeon - price);
       }
     else {
