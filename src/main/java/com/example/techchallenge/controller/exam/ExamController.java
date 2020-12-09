@@ -118,33 +118,42 @@ public class ExamController {
 
   @PutMapping("/exams/{id}")
   ResponseEntity<?> replaceExam(@RequestBody Exam novoExam, @PathVariable Long id) {
-    Exam exam =
-        repository
-            .findById(id)
-            .map(
-                exam1 -> {
-                  exam1.setHealthcareInstitutionId(novoExam.getHealthcareInstitutionId());
-                  exam1.setPatientAge(novoExam.getPatientAge());
-                  exam1.setPatientGender(novoExam.getPatientGender());
-                  exam1.setPatientName(novoExam.getPatientName());
-                  exam1.setPhysicianCRM(novoExam.getPhysicianCRM());
-                  exam1.setPhysicianName(novoExam.getPhysicianName());
-                  exam1.setProcedureName(novoExam.getProcedureName());
-                  return repository.save(exam1);
-                })
-            .orElseGet(
-                () -> {
-                  novoExam.setId(id);
-                  return repository.save(novoExam);
-                });
-    EntityModel<Exam> entityModel = assembler.toModel(exam);
-    return ResponseEntity.created(entityModel.getRequiredLink(IanaLinkRelations.SELF).toUri())
-        .body(entityModel);
+    Exam exam;
+    if (validaExam(novoExam)) {
+      exam =
+          repository
+              .findById(id)
+              .map(
+                  exam1 -> {
+                    exam1.setHealthcareInstitutionId(novoExam.getHealthcareInstitutionId());
+                    exam1.setPatientAge(novoExam.getPatientAge());
+                    exam1.setPatientGender(novoExam.getPatientGender());
+                    exam1.setPatientName(novoExam.getPatientName());
+                    exam1.setPhysicianCRM(novoExam.getPhysicianCRM());
+                    exam1.setPhysicianName(novoExam.getPhysicianName());
+                    exam1.setProcedureName(novoExam.getProcedureName());
+                    return repository.save(exam1);
+                  })
+              .orElseGet(
+                  () -> {
+                    novoExam.setId(id);
+                    return repository.save(novoExam);
+                  });
+      EntityModel<Exam> entityModel = assembler.toModel(exam);
+      return ResponseEntity.created(entityModel.getRequiredLink(IanaLinkRelations.SELF).toUri())
+          .body(entityModel);
+    } else {
+      throw new ExamException("Inconsistent Exam data.");
+    }
   }
 
   @DeleteMapping("/exams/{id}")
   ResponseEntity<?> deleteExam(@PathVariable Long id) {
-    repository.deleteById(id);
+    try {
+      repository.deleteById(id);
+    } catch (Exception e) {
+      throw new ExamNotFoundException(id);
+    }
     return ResponseEntity.noContent().build();
   }
 }
