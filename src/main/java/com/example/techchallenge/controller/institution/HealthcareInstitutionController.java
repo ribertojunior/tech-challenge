@@ -2,6 +2,9 @@ package com.example.techchallenge.controller.institution;
 
 import com.example.techchallenge.entity.HealthcareInstitution;
 import com.example.techchallenge.repository.HealthcareInstitutionRepository;
+import com.example.techchallenge.security.Token;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
 import lombok.AllArgsConstructor;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
@@ -11,8 +14,11 @@ import org.springframework.hateoas.mediatype.problem.Problem;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -46,6 +52,7 @@ public class HealthcareInstitutionController {
               "CNPJ " + institution.getCnpj() + " repetition clause error");
         }
         institution.setCnpj(removeNonNumbers(institution.getCnpj()));
+        institution.setPixeon(20);
         HealthcareInstitution institutionSave = repository.save(institution);
         EntityModel<HealthcareInstitution> entityModel = assembler.toModel(institutionSave);
         return ResponseEntity.created(
@@ -68,9 +75,7 @@ public class HealthcareInstitutionController {
   @GetMapping("/institutions/{id}")
   EntityModel<HealthcareInstitution> one(@PathVariable Long id) {
     HealthcareInstitution institution =
-        repository
-            .findById(id)
-            .orElseThrow(() -> new HealthcareInstitutionNotFoundException(id));
+        repository.findById(id).orElseThrow(() -> new HealthcareInstitutionNotFoundException(id));
     return assembler.toModel(institution);
   }
 
@@ -79,24 +84,26 @@ public class HealthcareInstitutionController {
       @RequestBody HealthcareInstitution novoInstitution, @PathVariable Long id) {
     HealthcareInstitution healthcareInstitution = new HealthcareInstitution();
     if (validaInstitution(novoInstitution)) {
-      HealthcareInstitution byCnpj = repository.findByCnpj(removeNonNumbers(novoInstitution.getCnpj()));
+      HealthcareInstitution byCnpj =
+          repository.findByCnpj(removeNonNumbers(novoInstitution.getCnpj()));
       if (byCnpj != null && !byCnpj.getId().equals(novoInstitution.getId())) {
         throw new HealthcareInstitutionException(
             "CNPJ " + novoInstitution.getCnpj() + " repetition clause error");
       }
-      healthcareInstitution = repository
-          .findById(id)
-          .map(
-              institution -> {
-                institution.setCnpj(novoInstitution.getCnpj());
-                institution.setName(novoInstitution.getName());
-                return repository.save(institution);
-              })
-          .orElseGet(
-              () -> {
-                novoInstitution.setId(id);
-                return repository.save(novoInstitution);
-              });
+      healthcareInstitution =
+          repository
+              .findById(id)
+              .map(
+                  institution -> {
+                    institution.setCnpj(novoInstitution.getCnpj());
+                    institution.setName(novoInstitution.getName());
+                    return repository.save(institution);
+                  })
+              .orElseGet(
+                  () -> {
+                    novoInstitution.setId(id);
+                    return repository.save(novoInstitution);
+                  });
     }
     EntityModel<HealthcareInstitution> entityModel = assembler.toModel(healthcareInstitution);
     return ResponseEntity.created(entityModel.getRequiredLink(IanaLinkRelations.SELF).toUri())
@@ -107,5 +114,40 @@ public class HealthcareInstitutionController {
   ResponseEntity<?> deleteInstitution(@PathVariable Long id) {
     repository.deleteById(id);
     return ResponseEntity.noContent().build();
+  }
+
+  @PostMapping("/auth")
+  Token login(@RequestBody HealthcareInstitution institution) {
+    if (validaInstitution(institution)) {
+      HealthcareInstitution byCnpj =
+          repository.findByCnpj(removeNonNumbers(institution.getCnpj()));
+      if (byCnpj == null) {
+        throw new HealthcareInstitutionNotFoundException(null);
+      }
+      return new Token(getJWTToken(institution.getCnpj()));
+    }
+    throw new HealthcareInstitutionException("Healthcare Institution info with error");
+  }
+
+  private String getJWTToken(String cnpj) {
+    String secret = "secret";
+    List<GrantedAuthority> grantedAuthorities =
+        AuthorityUtils.commaSeparatedStringToAuthorityList("ROLE_USER");
+
+    String token =
+        Jwts.builder()
+            .setId("pixeonJWT")
+            .setSubject(cnpj)
+            .claim(
+                "authorities",
+                grantedAuthorities.stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .collect(Collectors.toList()))
+            .setIssuedAt(new Date(System.currentTimeMillis()))
+            .setExpiration(new Date(System.currentTimeMillis() + 600000))
+            .signWith(SignatureAlgorithm.HS512, secret.getBytes())
+            .compact();
+
+    return "Bearer " + token;
   }
 }
