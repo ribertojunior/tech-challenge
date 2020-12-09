@@ -45,7 +45,7 @@ public class JWTAuthorizationFilter extends OncePerRequestFilter {
     String jwtToken = request.getHeader(HEADER).replace(PREFIX, "");
     return Jwts.parser().setSigningKey(SECRET.getBytes()).parseClaimsJws(jwtToken).getBody();
   }
-  
+
   private void setUpSpringAuthentication(Claims claims) {
     @SuppressWarnings("unchecked")
     List<String> authorities = (List<String>) claims.get("authorities");
